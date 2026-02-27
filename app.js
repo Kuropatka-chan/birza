@@ -1,4 +1,5 @@
 const BASE_OWNER = 'NotAHamster';
+const USER_OWNER = 'Текущий пользователь';
 
 const state = {
   products: [],
@@ -12,11 +13,10 @@ const state = {
   productSortBy: 'price',
   productSortDir: 1,
   adminEnabled: false,
-  purchases: {},
   statsMode: 'market',
-  statsViewMode: 'absolute',
   statsPeriod: 'days',
-  statsHistory: [],
+  dealsHistory: [],
+  userBalance: 10000,
 };
 
 const els = {
@@ -35,7 +35,6 @@ const els = {
   productSortBy: document.getElementById('productSortBy'),
   productSortDirBtn: document.getElementById('productSortDirBtn'),
   statsContent: document.getElementById('statsContent'),
-  statsViewMode: document.getElementById('statsViewMode'),
   statsPeriod: document.getElementById('statsPeriod'),
   adminToggleBtn: document.getElementById('adminToggleBtn'),
   adminBadge: document.getElementById('adminBadge'),
@@ -44,7 +43,7 @@ const els = {
   lotType: document.getElementById('lotType'),
   lotPrice: document.getElementById('lotPrice'),
   lotQty: document.getElementById('lotQty'),
-  productsList: document.getElementById('productsList'),
+  userBalance: document.getElementById('userBalance'),
 };
 
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -59,7 +58,7 @@ async function init() {
   bindEvents();
   refreshProductListDatalist();
   refreshCategoryFilter();
-  snapshotMarketStats();
+  renderBalance();
   renderMarket();
   renderStats();
 }
@@ -83,9 +82,9 @@ async function loadProducts() {
       const name = match[1].trim();
       const basePrice = Number(match[2]);
       const baseOffers = [
-        { price: round2(basePrice), quantity: 20, source: 'Базовая цена' },
-        { price: round2(basePrice * 0.9), quantity: 15, source: 'Скидка -10%' },
-        { price: round2(basePrice * 1.1), quantity: 10, source: 'Наценка +10%' },
+        { price: round2(basePrice), quantity: 20 },
+        { price: round2(basePrice * 0.9), quantity: 15 },
+        { price: round2(basePrice * 1.1), quantity: 10 },
       ];
       const offers = baseOffers.flatMap((offer) => ([
         {
@@ -100,7 +99,6 @@ async function loadProducts() {
           owner: BASE_OWNER,
           price: round2(offer.price * 0.95),
           quantity: Math.max(5, Math.floor(offer.quantity * 0.7)),
-          source: `${offer.source} (заявка)`,
         },
       ]));
 
@@ -181,10 +179,6 @@ function bindEvents() {
     renderStats();
   });
 
-  els.statsViewMode.addEventListener('change', (e) => {
-    state.statsViewMode = e.target.value;
-    renderStats();
-  });
   els.statsPeriod.addEventListener('change', (e) => {
     state.statsPeriod = e.target.value;
     renderStats();
@@ -292,7 +286,7 @@ function renderProductTab() {
     });
 
   if (!offers.length) {
-    els.productOffersBody.innerHTML = '<tr><td colspan="6">Лотов этого типа нет.</td></tr>';
+    els.productOffersBody.innerHTML = '<tr><td colspan="5">Лотов этого типа нет.</td></tr>';
     return;
   }
 
@@ -302,7 +296,6 @@ function renderProductTab() {
       <td>${editableCell(offer.price, product.id, offer.id, 'price')}</td>
       <td>${editableCell(offer.quantity, product.id, offer.id, 'quantity')}</td>
       <td>${offer.owner}</td>
-      <td>${offer.source}</td>
       <td><button class="buy" data-deal-offer="${offer.id}" data-deal-product="${product.id}">${state.productLotType === 'sell' ? 'Купить' : 'Продать'}</button></td>
     </tr>
   `).join('');
@@ -331,7 +324,6 @@ function bindAdminInputs() {
       const val = Number(inp.value);
       if (Number.isNaN(val) || val < 0) return;
       offer[f] = f === 'quantity' ? Math.floor(val) : round2(val);
-      snapshotMarketStats();
       renderProductTab();
       renderMarket();
       renderStats();
@@ -345,14 +337,47 @@ function executeDeal(productId, offerId) {
   const offer = product.offers.find((o) => o.id === offerId);
   if (!offer || offer.quantity < 1) return;
 
-  offer.quantity -= 1;
-  if (!state.purchases[productId]) {
-    state.purchases[productId] = { name: product.name, qty: 0, spent: 0, type: offer.type };
-  }
-  state.purchases[productId].qty += 1;
-  state.purchases[productId].spent += offer.price;
+  const maxQty = offer.quantity;
+  const entered = prompt(`Введите количество (1-${maxQty})`, '1');
+  if (entered === null) return;
 
-  snapshotMarketStats();
+  const qty = Math.floor(Number(entered));
+  if (Number.isNaN(qty) || qty < 1 || qty > maxQty) {
+    alert('Некорректное количество.');
+    return;
+  }
+
+  const amount = round2(offer.price * qty);
+  const action = state.productLotType === 'sell' ? 'покупку' : 'продажу';
+  const confirmed = confirm(`Подтвердите ${action}: ${qty} шт. за ${amount} ДСМ`);
+  if (!confirmed) return;
+
+  if (offer.type === 'sell') {
+    if (state.userBalance < amount) {
+      alert(`Недостаточно средств. Баланс: ${round2(state.userBalance)} ДСМ`);
+      return;
+    }
+    state.userBalance = round2(state.userBalance - amount);
+  } else {
+    state.userBalance = round2(state.userBalance + amount);
+  }
+
+  offer.quantity -= qty;
+
+  state.dealsHistory.push({
+    ts: new Date().toISOString(),
+    productId: product.id,
+    productName: product.name,
+    type: offer.type,
+    qty,
+    price: offer.price,
+  });
+
+  if (state.dealsHistory.length > 5000) {
+    state.dealsHistory = state.dealsHistory.slice(-5000);
+  }
+
+  renderBalance();
   renderProductTab();
   renderMarket();
   renderStats();
@@ -361,125 +386,114 @@ function executeDeal(productId, offerId) {
 function renderStats() {
   const isProductMode = state.statsMode === 'product';
   const selectedProduct = state.products.find((p) => p.id === state.selectedProductId);
-
-  if (state.statsViewMode === 'absolute') {
-    renderAbsoluteStats(isProductMode, selectedProduct);
-    return;
-  }
-
   renderGraphStats(isProductMode, selectedProduct);
 }
 
-function renderAbsoluteStats(isProductMode, selectedProduct) {
-  if (isProductMode) {
-    if (!selectedProduct) {
-      els.statsContent.innerHTML = '<p>Товар не выбран.</p>';
-      return;
-    }
-    const p = state.purchases[selectedProduct.id] || { qty: 0, spent: 0, type: state.productLotType };
-    const avg = p.qty ? round2(p.spent / p.qty) : 0;
-    els.statsContent.innerHTML = `
-      <h3>Статистика по товару: ${selectedProduct.name}</h3>
-      <p>Тип сделок: <strong>${getOfferLabel(state.productLotType)}</strong></p>
-      <p>Количество сделок: <strong>${p.qty}</strong></p>
-      <p>Средняя цена сделки: <strong>${avg} ДСМ</strong></p>
-    `;
-    return;
-  }
-
-  const entries = Object.values(state.purchases);
-  if (!entries.length) {
-    els.statsContent.innerHTML = '<p>Сделок пока нет.</p>';
-    return;
-  }
-
-  const rows = entries.map((e) => {
-    const avg = e.qty ? round2(e.spent / e.qty) : 0;
-    return `<tr><td>${e.name}</td><td>${getOfferLabel(e.type)}</td><td>${e.qty}</td><td>${avg}</td></tr>`;
-  }).join('');
-
-  els.statsContent.innerHTML = `
-    <table>
-      <thead><tr><th>Товар</th><th>Тип</th><th>Сделок</th><th>Средняя цена</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-function snapshotMarketStats() {
-  const timestamp = new Date();
-  for (const product of state.products) {
-    for (const type of ['sell', 'buy']) {
-      const summary = getProductSummary(product, type);
-      state.statsHistory.push({
-        ts: timestamp.toISOString(),
-        productId: product.id,
-        productName: product.name,
-        type,
-        avgPrice: summary.avg,
-        totalQty: summary.totalQty,
-      });
-    }
-  }
-
-  if (state.statsHistory.length > 5000) {
-    state.statsHistory = state.statsHistory.slice(-5000);
-  }
-}
-
 function renderGraphStats(isProductMode, selectedProduct) {
-  const filtered = state.statsHistory.filter((entry) => {
-    if (entry.type !== (isProductMode ? state.productLotType : state.marketLotType)) return false;
-    if (isProductMode) return selectedProduct && entry.productId === selectedProduct.id;
+  const lotType = isProductMode ? state.productLotType : state.marketLotType;
+  const filteredDeals = state.dealsHistory.filter((deal) => {
+    if (deal.type !== lotType) return false;
+    if (isProductMode) return selectedProduct && deal.productId === selectedProduct.id;
     return true;
   });
 
-  if (!filtered.length) {
-    els.statsContent.innerHTML = '<p>Недостаточно данных для графика.</p>';
+  if (!filteredDeals.length) {
+    els.statsContent.innerHTML = '<p>Сделок пока нет, график пуст.</p>';
     return;
   }
 
-  const grouped = aggregateByPeriod(filtered, state.statsPeriod);
-  const avgPriceMax = Math.max(...grouped.map((g) => g.avgPrice), 1);
-  const qtyMax = Math.max(...grouped.map((g) => g.totalQty), 1);
+  const grouped = aggregateDealsByPeriod(filteredDeals, state.statsPeriod);
+  const chart = renderLineChart(grouped);
 
   els.statsContent.innerHTML = `
-    <h3>${isProductMode && selectedProduct ? `График: ${selectedProduct.name}` : 'График: общий рынок'} (${getOfferLabel(isProductMode ? state.productLotType : state.marketLotType)})</h3>
-    <div class="chart-grid">
-      <div>
-        <h4>Средняя цена</h4>
-        ${grouped.map((g) => barRow(g.label, g.avgPrice, avgPriceMax, 'ДСМ')).join('')}
-      </div>
-      <div>
-        <h4>Количество предложений</h4>
-        ${grouped.map((g) => barRow(g.label, g.totalQty, qtyMax, 'шт.')).join('')}
-      </div>
-    </div>
+    <h3>${isProductMode && selectedProduct ? `График: ${selectedProduct.name}` : 'График: общий рынок'} (${getOfferLabel(lotType)})</h3>
+    <p class="hint">Ось X — период времени, ось Y — цена товара. Наведите на точку для просмотра объёма продаж и цены.</p>
+    ${chart}
   `;
 }
 
-function aggregateByPeriod(entries, period) {
+function aggregateDealsByPeriod(entries, period) {
   const groups = new Map();
 
   for (const entry of entries) {
     const date = new Date(entry.ts);
     const key = periodKey(date, period);
     if (!groups.has(key)) {
-      groups.set(key, { priceTotal: 0, qtyTotal: 0, points: 0, label: key });
+      groups.set(key, { label: key, totalValue: 0, totalQty: 0, dealsCount: 0 });
     }
+
     const group = groups.get(key);
-    group.priceTotal += entry.avgPrice;
-    group.qtyTotal += entry.totalQty;
-    group.points += 1;
+    group.totalValue += entry.price * entry.qty;
+    group.totalQty += entry.qty;
+    group.dealsCount += 1;
   }
 
   return [...groups.values()]
     .map((g) => ({
       label: g.label,
-      avgPrice: round2(g.priceTotal / g.points),
-      totalQty: round2(g.qtyTotal / g.points),
+      avgPrice: g.totalQty ? round2(g.totalValue / g.totalQty) : 0,
+      soldQty: g.totalQty,
+      dealsCount: g.dealsCount,
     }))
     .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+}
+
+function renderLineChart(points) {
+  if (points.length === 1) {
+    return `
+      <div class="single-point-chart">
+        <p><strong>${points[0].label}</strong></p>
+        <p>Цена: ${points[0].avgPrice} ДСМ</p>
+        <p>Продано: ${points[0].soldQty} шт.</p>
+      </div>
+    `;
+  }
+
+  const width = 760;
+  const height = 340;
+  const padding = 40;
+
+  const maxY = Math.max(...points.map((p) => p.avgPrice), 1);
+  const minY = Math.min(...points.map((p) => p.avgPrice), 0);
+  const yRange = Math.max(1, maxY - minY);
+  const stepX = (width - padding * 2) / (points.length - 1);
+
+  const coords = points.map((p, idx) => {
+    const x = round2(padding + stepX * idx);
+    const y = round2(height - padding - ((p.avgPrice - minY) / yRange) * (height - padding * 2));
+    return { ...p, x, y };
+  });
+
+  const pathD = coords.map((c, idx) => `${idx === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+
+  const xLabels = coords.map((c) => `<text x="${c.x}" y="${height - 8}" class="axis-label" text-anchor="middle">${c.label}</text>`).join('');
+  const yTicks = [0, 0.5, 1].map((ratio) => {
+    const y = round2(padding + (height - padding * 2) * ratio);
+    const val = round2(maxY - (maxY - minY) * ratio);
+    return `
+      <line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" class="grid-line" />
+      <text x="8" y="${y + 4}" class="axis-label">${val}</text>
+    `;
+  }).join('');
+
+  const pointsSvg = coords.map((c) => `
+    <circle cx="${c.x}" cy="${c.y}" r="5" class="chart-point">
+      <title>${c.label}\nЦена: ${c.avgPrice} ДСМ\nПродано: ${c.soldQty} шт.\nСделок: ${c.dealsCount}</title>
+    </circle>
+  `).join('');
+
+  return `
+    <div class="line-chart-wrap">
+      <svg viewBox="0 0 ${width} ${height}" class="line-chart" role="img" aria-label="График цены товаров по периодам">
+        ${yTicks}
+        <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" class="axis-line" />
+        <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" class="axis-line" />
+        <path d="${pathD}" class="price-line" />
+        ${pointsSvg}
+        ${xLabels}
+      </svg>
+    </div>
+  `;
 }
 
 function periodKey(date, period) {
@@ -494,17 +508,6 @@ function periodKey(date, period) {
     return `${year}-W${String(week).padStart(2, '0')}`;
   }
   return `${year}-${month}-${day}`;
-}
-
-function barRow(label, value, max, unit) {
-  const width = Math.max(4, Math.round((value / max) * 100));
-  return `
-    <div class="bar-row">
-      <span class="bar-label">${label}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
-      <span class="bar-value">${value} ${unit}</span>
-    </div>
-  `;
 }
 
 function renderSuggestions() {
@@ -531,7 +534,7 @@ function renderSuggestions() {
 }
 
 function refreshProductListDatalist() {
-  els.productsList.innerHTML = state.products.map((p) => `<option value="${p.name}"></option>`).join('');
+  els.lotName.innerHTML = state.products.map((p) => `<option value="${p.name}">${p.name}</option>`).join('');
 }
 
 function refreshCategoryFilter() {
@@ -550,28 +553,27 @@ function createUserLot() {
 
   if (!name || Number.isNaN(price) || Number.isNaN(qty) || price <= 0 || qty <= 0) return;
 
-  let product = state.products.find((p) => p.name.toLowerCase() === name.toLowerCase());
-
+  const product = state.products.find((p) => p.name === name);
   if (!product) {
-    product = { id: uid(), name, category: 'Пользовательские', offers: [] };
-    state.products.push(product);
-    refreshCategoryFilter();
+    alert('Нельзя добавить новый товар. Выберите товар из списка.');
+    return;
   }
 
   product.offers.push({
     id: uid(),
     type,
-    owner: 'Текущий пользователь',
+    owner: USER_OWNER,
     price: round2(price),
     quantity: qty,
-    source: `Личный лот (${getOfferLabel(type).toLowerCase()})`,
   });
 
-  snapshotMarketStats();
   els.lotForm.reset();
-  refreshProductListDatalist();
   renderMarket();
   if (state.selectedProductId === product.id) renderProductTab();
+}
+
+function renderBalance() {
+  els.userBalance.textContent = `${round2(state.userBalance)} ДСМ`;
 }
 
 function toggleAdminMode() {
@@ -584,6 +586,7 @@ function toggleAdminMode() {
     state.adminEnabled = true;
     els.adminToggleBtn.textContent = 'Выключить админ-доступ';
     els.adminBadge.textContent = 'Режим: администратор';
+    editBalanceByAdmin();
     renderProductTab();
   } else {
     state.adminEnabled = false;
@@ -591,6 +594,18 @@ function toggleAdminMode() {
     els.adminBadge.textContent = 'Режим: пользователь';
     renderProductTab();
   }
+}
+
+function editBalanceByAdmin() {
+  const entered = prompt('Введите новый баланс пользователя (ДСМ)', String(state.userBalance));
+  if (entered === null) return;
+  const val = Number(entered);
+  if (Number.isNaN(val) || val < 0) {
+    alert('Некорректный баланс.');
+    return;
+  }
+  state.userBalance = round2(val);
+  renderBalance();
 }
 
 init();

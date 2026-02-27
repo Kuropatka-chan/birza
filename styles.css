@@ -32,6 +32,12 @@ header.topbar, nav.tabs, .panel-header, table, .lot-form, .hint, #statsContent {
 
 .admin-controls { display: flex; gap: 8px; align-items: center; }
 .badge { font-size: 13px; color: var(--muted); }
+.balance-box {
+  background: #1f2b45;
+  border: 1px solid #3b4f7a;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
 
 .tabs {
   display: flex;
@@ -121,44 +127,53 @@ th { background: #263354; }
 .lot-form label { display: flex; flex-direction: column; gap: 6px; }
 .hint { margin: 8px auto; color: var(--muted); }
 
-.chart-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+.line-chart-wrap {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 10px;
+  overflow-x: auto;
+}
+
+.line-chart {
+  width: 100%;
+  min-width: 760px;
+  height: 360px;
+}
+
+.axis-line {
+  stroke: #5a6f9d;
+  stroke-width: 1.5;
+}
+
+.grid-line {
+  stroke: #283552;
+  stroke-width: 1;
+}
+
+.axis-label {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.price-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.chart-point {
+  fill: #8fe8ff;
+  stroke: #102238;
+  stroke-width: 2;
+}
+
+.single-point-chart {
   background: var(--surface);
   padding: 14px;
   border-radius: 10px;
 }
 
-.bar-row {
-  display: grid;
-  grid-template-columns: 120px 1fr 90px;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 0;
-}
-
-.bar-label,
-.bar-value {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.bar-track {
-  background: #273252;
-  border-radius: 999px;
-  height: 12px;
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--bar), var(--accent));
-}
-
 @media (max-width: 1100px) {
-  .chart-grid { grid-template-columns: 1fr; }
   .lot-form { grid-template-columns: 1fr; }
   table { font-size: 13px; }
 }
