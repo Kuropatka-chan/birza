@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Биржа DSM</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Биржа DSM</h1>
+    <div class="admin-controls">
+      <button id="adminToggleBtn" class="secondary">Включить админ-доступ</button>
+      <span id="adminBadge" class="badge">Режим: пользователь</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="market">Общий рынок</button>
+    <button class="tab" data-tab="product">Товар</button>
+    <button class="tab" data-tab="stats">Статистика</button>
+    <button class="tab" data-tab="cabinet">Личный кабинет</button>
+  </nav>
+
+  <main>
+    <section id="market" class="tab-panel active">
+      <div class="panel-header">
+        <h2>Общий список товаров</h2>
+        <div class="controls-row">
+          <div class="search-wrap">
+            <input id="globalSearch" type="text" placeholder="Быстрый поиск товара..." autocomplete="off" />
+            <ul id="searchSuggestions" class="suggestions"></ul>
+          </div>
+          <label>
+            Сортировать по
+            <select id="sortBy">
+              <option value="name">названию</option>
+              <option value="price">цене</option>
+              <option value="quantity">количеству</option>
+            </select>
+          </label>
+          <button id="sortDirBtn" class="secondary">↑</button>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Иконка</th>
+            <th>Товар</th>
+            <th>Категория</th>
+            <th>Средняя цена</th>
+            <th>Мин. цена</th>
+            <th>Макс. цена</th>
+            <th>Всего доступно</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody id="marketBody"></tbody>
+      </table>
+    </section>
+
+    <section id="product" class="tab-panel">
+      <div class="panel-header">
+        <h2 id="productTitle">Карточка товара</h2>
+        <div>
+          <button id="backToMarket" class="secondary">← Вернуться на общий рынок</button>
+          <button id="goToProductStats" class="secondary">Статистика товара</button>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Товар</th>
+            <th>Цена</th>
+            <th>Количество</th>
+            <th>Источник</th>
+            <th>Купить</th>
+          </tr>
+        </thead>
+        <tbody id="productOffersBody"></tbody>
+      </table>
+    </section>
+
+    <section id="stats" class="tab-panel">
+      <div class="panel-header">
+        <h2>Статистика покупок</h2>
+        <div>
+          <button id="showMarketStats" class="secondary">Общий рынок</button>
+          <button id="showProductStats" class="secondary">По выбранному товару</button>
+        </div>
+      </div>
+      <div id="statsContent"></div>
+    </section>
+
+    <section id="cabinet" class="tab-panel">
+      <div class="panel-header">
+        <h2>Личный кабинет</h2>
+      </div>
+
+      <form id="lotForm" class="lot-form">
+        <label>
+          Название товара
+          <input id="lotName" type="text" placeholder="Например, Железная руда (т)" list="productsList" required />
+        </label>
+        <label>
+          Цена
+          <input id="lotPrice" type="number" min="0.01" step="0.01" required />
+        </label>
+        <label>
+          Количество
+          <input id="lotQty" type="number" min="1" step="1" required />
+        </label>
+        <button type="submit">Создать лот</button>
+      </form>
+      <datalist id="productsList"></datalist>
+      <p class="hint">Вы можете выбрать существующий товар или создать новый пользовательский.</p>
+    </section>
+  </main>
+
+  <template id="iconTemplate">
+    <div class="icon-placeholder">заглушка</div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
