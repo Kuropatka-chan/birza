@@ -7,8 +7,8 @@ const state = {
   searchQuery: '',
   categoryFilter: 'all',
   marketLotType: 'sell',
-  sortBy: 'name',
-  sortDir: 1,
+  marketSortColumn: null,
+  marketSortDir: 1,
   productLotType: 'sell',
   productSortBy: 'price',
   productSortDir: 1,
@@ -23,10 +23,9 @@ const els = {
   tabs: [...document.querySelectorAll('.tab')],
   panels: [...document.querySelectorAll('.tab-panel')],
   marketBody: document.getElementById('marketBody'),
+  sortableHeaders: [...document.querySelectorAll('[data-sort-col]')],
   productOffersBody: document.getElementById('productOffersBody'),
   productTitle: document.getElementById('productTitle'),
-  sortBy: document.getElementById('sortBy'),
-  sortDirBtn: document.getElementById('sortDirBtn'),
   globalSearch: document.getElementById('globalSearch'),
   searchSuggestions: document.getElementById('searchSuggestions'),
   categoryFilter: document.getElementById('categoryFilter'),
@@ -39,11 +38,14 @@ const els = {
   adminToggleBtn: document.getElementById('adminToggleBtn'),
   adminBadge: document.getElementById('adminBadge'),
   lotForm: document.getElementById('lotForm'),
-  lotName: document.getElementById('lotName'),
+  lotNameInput: document.getElementById('lotNameInput'),
+  lotNameSuggestions: document.getElementById('lotNameSuggestions'),
   lotType: document.getElementById('lotType'),
   lotPrice: document.getElementById('lotPrice'),
   lotQty: document.getElementById('lotQty'),
   userBalance: document.getElementById('userBalance'),
+  userBalanceBtn: document.getElementById('userBalanceBtn'),
+  myLotsBody: document.getElementById('myLotsBody'),
 };
 
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -56,11 +58,12 @@ function uid() {
 async function init() {
   await loadProducts();
   bindEvents();
-  refreshProductListDatalist();
   refreshCategoryFilter();
   renderBalance();
   renderMarket();
   renderStats();
+  renderLotSuggestions();
+  renderMyLots();
 }
 
 async function loadProducts() {
@@ -91,12 +94,16 @@ async function loadProducts() {
           id: uid(),
           type: 'sell',
           owner: BASE_OWNER,
+          active: true,
+          visible: true,
           ...offer,
         },
         {
           id: uid(),
           type: 'buy',
           owner: BASE_OWNER,
+          active: true,
+          visible: true,
           price: round2(offer.price * 0.95),
           quantity: Math.max(5, Math.floor(offer.quantity * 0.7)),
         },
@@ -118,15 +125,8 @@ async function loadProducts() {
 function bindEvents() {
   els.tabs.forEach((tabBtn) => tabBtn.addEventListener('click', () => activateTab(tabBtn.dataset.tab)));
 
-  els.sortBy.addEventListener('change', (e) => {
-    state.sortBy = e.target.value;
-    renderMarket();
-  });
-
-  els.sortDirBtn.addEventListener('click', () => {
-    state.sortDir *= -1;
-    els.sortDirBtn.textContent = state.sortDir === 1 ? '↑' : '↓';
-    renderMarket();
+  els.sortableHeaders.forEach((header) => {
+    header.addEventListener('click', () => toggleMarketSort(header.dataset.sortCol));
   });
 
   els.categoryFilter.addEventListener('change', (e) => {
@@ -185,6 +185,19 @@ function bindEvents() {
   });
 
   els.adminToggleBtn.addEventListener('click', toggleAdminMode);
+  els.userBalanceBtn.addEventListener('click', () => {
+    if (!state.adminEnabled) return;
+    editBalanceByAdmin();
+  });
+
+  els.lotNameInput.addEventListener('input', renderLotSuggestions);
+  els.lotNameInput.addEventListener('focus', renderLotSuggestions);
+
+  document.addEventListener('click', (e) => {
+    if (!els.lotNameSuggestions.contains(e.target) && e.target !== els.lotNameInput) {
+      els.lotNameSuggestions.innerHTML = '';
+    }
+  });
 
   els.lotForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -197,10 +210,18 @@ function activateTab(tabId) {
   els.panels.forEach((p) => p.classList.toggle('active', p.id === tabId));
   if (tabId === 'product') renderProductTab();
   if (tabId === 'stats') renderStats();
+  if (tabId === 'cabinet') {
+    renderMyLots();
+    renderLotSuggestions();
+  }
+}
+
+function isOfferPublic(offer) {
+  return offer.active !== false && offer.visible !== false && offer.quantity > 0;
 }
 
 function getProductSummary(product, lotType = state.marketLotType) {
-  const offers = product.offers.filter((o) => o.type === lotType);
+  const offers = product.offers.filter((o) => o.type === lotType && isOfferPublic(o));
   if (!offers.length) return { avg: 0, min: 0, max: 0, totalQty: 0 };
 
   const prices = offers.map((o) => o.price);
@@ -214,31 +235,55 @@ function getProductSummary(product, lotType = state.marketLotType) {
   };
 }
 
+function toggleMarketSort(column) {
+  if (state.marketSortColumn !== column) {
+    state.marketSortColumn = column;
+    state.marketSortDir = 1;
+  } else if (state.marketSortDir === 1) {
+    state.marketSortDir = -1;
+  } else {
+    state.marketSortColumn = null;
+    state.marketSortDir = 1;
+  }
+  renderMarket();
+}
+
 function getFilteredSortedProducts() {
   const query = state.searchQuery.trim().toLowerCase();
   const filtered = state.products.filter((p) => {
     const byName = p.name.toLowerCase().includes(query);
     const byCategory = state.categoryFilter === 'all' || p.category === state.categoryFilter;
-    const byType = p.offers.some((o) => o.type === state.marketLotType && o.quantity > 0);
+    const byType = p.offers.some((o) => o.type === state.marketLotType && isOfferPublic(o));
     return byName && byCategory && byType;
   });
 
+  if (!state.marketSortColumn) return filtered;
+
   return filtered.sort((a, b) => {
-    if (state.sortBy === 'name') return a.name.localeCompare(b.name, 'ru') * state.sortDir;
     const sa = getProductSummary(a, state.marketLotType);
     const sb = getProductSummary(b, state.marketLotType);
-    if (state.sortBy === 'price') return (sa.avg - sb.avg) * state.sortDir;
-    return (sa.totalQty - sb.totalQty) * state.sortDir;
+    if (state.marketSortColumn === 'category') return a.category.localeCompare(b.category, 'ru') * state.marketSortDir;
+    if (state.marketSortColumn === 'avg') return (sa.avg - sb.avg) * state.marketSortDir;
+    if (state.marketSortColumn === 'min') return (sa.min - sb.min) * state.marketSortDir;
+    if (state.marketSortColumn === 'max') return (sa.max - sb.max) * state.marketSortDir;
+    return (sa.totalQty - sb.totalQty) * state.marketSortDir;
   });
 }
 
 function renderMarket() {
+  els.sortableHeaders.forEach((h) => {
+    const col = h.dataset.sortCol;
+    let suffix = '';
+    if (state.marketSortColumn === col) suffix = state.marketSortDir === 1 ? ' ↑' : ' ↓';
+    h.textContent = h.textContent.replace(/\s[↑↓]$/, '') + suffix;
+  });
+
   const rows = getFilteredSortedProducts().map((product) => {
     const summary = getProductSummary(product, state.marketLotType);
     return `
       <tr>
         <td><div class="icon-placeholder">заглушка</div></td>
-        <td>${product.name}</td>
+        <td><button data-open-product="${product.id}" class="link-btn">${product.name}</button></td>
         <td>${product.category}</td>
         <td>${summary.avg}</td>
         <td>${summary.min}</td>
@@ -278,7 +323,7 @@ function renderProductTab() {
   els.productTitle.textContent = `Карточка: ${product.name} (${getOfferLabel(state.productLotType)})`;
 
   const offers = [...product.offers]
-    .filter((o) => o.type === state.productLotType)
+    .filter((o) => o.type === state.productLotType && isOfferPublic(o))
     .sort((a, b) => {
       if (state.productSortBy === 'price') return (a.price - b.price) * state.productSortDir;
       if (state.productSortBy === 'quantity') return (a.quantity - b.quantity) * state.productSortDir;
@@ -327,6 +372,7 @@ function bindAdminInputs() {
       renderProductTab();
       renderMarket();
       renderStats();
+      renderMyLots();
     });
   });
 }
@@ -335,7 +381,7 @@ function executeDeal(productId, offerId) {
   const product = state.products.find((p) => p.id === productId);
   if (!product) return;
   const offer = product.offers.find((o) => o.id === offerId);
-  if (!offer || offer.quantity < 1) return;
+  if (!offer || !isOfferPublic(offer)) return;
 
   const maxQty = offer.quantity;
   const entered = prompt(`Введите количество (1-${maxQty})`, '1');
@@ -381,15 +427,16 @@ function executeDeal(productId, offerId) {
   renderProductTab();
   renderMarket();
   renderStats();
+  renderMyLots();
 }
 
 function renderStats() {
   const isProductMode = state.statsMode === 'product';
   const selectedProduct = state.products.find((p) => p.id === state.selectedProductId);
-  renderGraphStats(isProductMode, selectedProduct);
+  renderStatsTable(isProductMode, selectedProduct);
 }
 
-function renderGraphStats(isProductMode, selectedProduct) {
+function renderStatsTable(isProductMode, selectedProduct) {
   const lotType = isProductMode ? state.productLotType : state.marketLotType;
   const filteredDeals = state.dealsHistory.filter((deal) => {
     if (deal.type !== lotType) return false;
@@ -398,102 +445,67 @@ function renderGraphStats(isProductMode, selectedProduct) {
   });
 
   if (!filteredDeals.length) {
-    els.statsContent.innerHTML = '<p>Сделок пока нет, график пуст.</p>';
+    els.statsContent.innerHTML = '<p>Сделок пока нет.</p>';
     return;
   }
 
-  const grouped = aggregateDealsByPeriod(filteredDeals, state.statsPeriod);
-  const chart = renderLineChart(grouped);
+  const grouped = aggregateDealsByPeriod(filteredDeals, state.statsPeriod, isProductMode);
+
+  const rows = grouped.map((item) => `
+    <tr>
+      <td>${item.period}</td>
+      <td>${item.productName}</td>
+      <td>${item.soldQty}</td>
+      <td>${item.avgPrice}</td>
+    </tr>
+  `).join('');
 
   els.statsContent.innerHTML = `
-    <h3>${isProductMode && selectedProduct ? `График: ${selectedProduct.name}` : 'График: общий рынок'} (${getOfferLabel(lotType)})</h3>
-    <p class="hint">Ось X — период времени, ось Y — цена товара. Наведите на точку для просмотра объёма продаж и цены.</p>
-    ${chart}
+    <h3>${isProductMode && selectedProduct ? `Статистика: ${selectedProduct.name}` : 'Статистика: общий рынок'} (${getOfferLabel(lotType)})</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Период</th>
+          <th>Товар</th>
+          <th>Куплено/продано (шт.)</th>
+          <th>Средняя цена</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
   `;
 }
 
-function aggregateDealsByPeriod(entries, period) {
+function aggregateDealsByPeriod(entries, period, isProductMode) {
   const groups = new Map();
 
   for (const entry of entries) {
     const date = new Date(entry.ts);
-    const key = periodKey(date, period);
+    const pKey = periodKey(date, period);
+    const key = isProductMode ? pKey : `${pKey}|${entry.productName}`;
+
     if (!groups.has(key)) {
-      groups.set(key, { label: key, totalValue: 0, totalQty: 0, dealsCount: 0 });
+      groups.set(key, {
+        period: pKey,
+        productName: entry.productName,
+        totalValue: 0,
+        totalQty: 0,
+      });
     }
 
     const group = groups.get(key);
     group.totalValue += entry.price * entry.qty;
     group.totalQty += entry.qty;
-    group.dealsCount += 1;
   }
 
   return [...groups.values()]
     .map((g) => ({
-      label: g.label,
+      period: g.period,
+      productName: g.productName,
       avgPrice: g.totalQty ? round2(g.totalValue / g.totalQty) : 0,
       soldQty: g.totalQty,
-      dealsCount: g.dealsCount,
     }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
-}
-
-function renderLineChart(points) {
-  if (points.length === 1) {
-    return `
-      <div class="single-point-chart">
-        <p><strong>${points[0].label}</strong></p>
-        <p>Цена: ${points[0].avgPrice} ДСМ</p>
-        <p>Продано: ${points[0].soldQty} шт.</p>
-      </div>
-    `;
-  }
-
-  const width = 760;
-  const height = 340;
-  const padding = 40;
-
-  const maxY = Math.max(...points.map((p) => p.avgPrice), 1);
-  const minY = Math.min(...points.map((p) => p.avgPrice), 0);
-  const yRange = Math.max(1, maxY - minY);
-  const stepX = (width - padding * 2) / (points.length - 1);
-
-  const coords = points.map((p, idx) => {
-    const x = round2(padding + stepX * idx);
-    const y = round2(height - padding - ((p.avgPrice - minY) / yRange) * (height - padding * 2));
-    return { ...p, x, y };
-  });
-
-  const pathD = coords.map((c, idx) => `${idx === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
-
-  const xLabels = coords.map((c) => `<text x="${c.x}" y="${height - 8}" class="axis-label" text-anchor="middle">${c.label}</text>`).join('');
-  const yTicks = [0, 0.5, 1].map((ratio) => {
-    const y = round2(padding + (height - padding * 2) * ratio);
-    const val = round2(maxY - (maxY - minY) * ratio);
-    return `
-      <line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" class="grid-line" />
-      <text x="8" y="${y + 4}" class="axis-label">${val}</text>
-    `;
-  }).join('');
-
-  const pointsSvg = coords.map((c) => `
-    <circle cx="${c.x}" cy="${c.y}" r="5" class="chart-point">
-      <title>${c.label}\nЦена: ${c.avgPrice} ДСМ\nПродано: ${c.soldQty} шт.\nСделок: ${c.dealsCount}</title>
-    </circle>
-  `).join('');
-
-  return `
-    <div class="line-chart-wrap">
-      <svg viewBox="0 0 ${width} ${height}" class="line-chart" role="img" aria-label="График цены товаров по периодам">
-        ${yTicks}
-        <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" class="axis-line" />
-        <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" class="axis-line" />
-        <path d="${pathD}" class="price-line" />
-        ${pointsSvg}
-        ${xLabels}
-      </svg>
-    </div>
-  `;
+    .sort((a, b) => `${a.period}|${a.productName}`.localeCompare(`${b.period}|${b.productName}`, 'ru'));
 }
 
 function periodKey(date, period) {
@@ -533,8 +545,22 @@ function renderSuggestions() {
   });
 }
 
-function refreshProductListDatalist() {
-  els.lotName.innerHTML = state.products.map((p) => `<option value="${p.name}">${p.name}</option>`).join('');
+function renderLotSuggestions() {
+  const query = els.lotNameInput.value.trim().toLowerCase();
+  const matched = state.products
+    .filter((p) => !query || p.name.toLowerCase().includes(query))
+    .slice(0, 10);
+
+  els.lotNameSuggestions.innerHTML = matched
+    .map((m) => `<li data-lot-suggestion="${m.name}">${m.name}</li>`)
+    .join('');
+
+  els.lotNameSuggestions.querySelectorAll('[data-lot-suggestion]').forEach((node) => {
+    node.addEventListener('click', () => {
+      els.lotNameInput.value = node.dataset.lotSuggestion;
+      els.lotNameSuggestions.innerHTML = '';
+    });
+  });
 }
 
 function refreshCategoryFilter() {
@@ -546,7 +572,7 @@ function refreshCategoryFilter() {
 }
 
 function createUserLot() {
-  const name = els.lotName.value.trim();
+  const name = els.lotNameInput.value.trim();
   const type = els.lotType.value;
   const price = Number(els.lotPrice.value);
   const qty = Math.floor(Number(els.lotQty.value));
@@ -563,13 +589,111 @@ function createUserLot() {
     id: uid(),
     type,
     owner: USER_OWNER,
+    active: true,
+    visible: true,
     price: round2(price),
     quantity: qty,
   });
 
   els.lotForm.reset();
   renderMarket();
+  renderMyLots();
+  renderLotSuggestions();
   if (state.selectedProductId === product.id) renderProductTab();
+}
+
+function getUserOffers() {
+  return state.products.flatMap((product) => product.offers
+    .filter((offer) => offer.owner === USER_OWNER)
+    .map((offer) => ({ product, offer })));
+}
+
+function renderMyLots() {
+  const myLots = getUserOffers();
+
+  if (!myLots.length) {
+    els.myLotsBody.innerHTML = '<tr><td colspan="6">У вас пока нет лотов.</td></tr>';
+    return;
+  }
+
+  els.myLotsBody.innerHTML = myLots.map(({ product, offer }) => `
+    <tr>
+      <td>
+        <select data-edit-user-lot="product" data-offer-id="${offer.id}">
+          ${state.products.map((p) => `<option value="${p.id}" ${p.id === product.id ? 'selected' : ''}>${p.name}</option>`).join('')}
+        </select>
+      </td>
+      <td>${getOfferLabel(offer.type)}</td>
+      <td><input type="number" min="0.01" step="0.01" value="${offer.price}" data-edit-user-lot="price" data-offer-id="${offer.id}" /></td>
+      <td><input type="number" min="1" step="1" value="${offer.quantity}" data-edit-user-lot="quantity" data-offer-id="${offer.id}" /></td>
+      <td>${offer.active === false ? 'Снят' : (offer.visible === false ? 'Скрыт' : 'Виден')}</td>
+      <td>
+        <button class="secondary" data-toggle-active="${offer.id}">${offer.active === false ? 'Вернуть в продажу/покупку' : 'Снять с продажи/покупки'}</button>
+        <button class="secondary" data-toggle-visible="${offer.id}">${offer.visible === false ? 'Сделать видимым' : 'Скрыть'}</button>
+      </td>
+    </tr>
+  `).join('');
+
+  els.myLotsBody.querySelectorAll('[data-toggle-active]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const found = findUserOffer(btn.dataset.toggleActive);
+      if (!found) return;
+      found.offer.active = found.offer.active === false;
+      renderMyLots();
+      renderMarket();
+      renderProductTab();
+    });
+  });
+
+  els.myLotsBody.querySelectorAll('[data-toggle-visible]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const found = findUserOffer(btn.dataset.toggleVisible);
+      if (!found) return;
+      found.offer.visible = found.offer.visible === false;
+      renderMyLots();
+      renderMarket();
+      renderProductTab();
+    });
+  });
+
+  els.myLotsBody.querySelectorAll('[data-edit-user-lot]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const found = findUserOffer(input.dataset.offerId);
+      if (!found) return;
+      const mode = input.dataset.editUserLot;
+
+      if (mode === 'product') {
+        const targetProduct = state.products.find((p) => p.id === input.value);
+        if (!targetProduct) return;
+        found.product.offers = found.product.offers.filter((o) => o.id !== found.offer.id);
+        targetProduct.offers.push(found.offer);
+      }
+
+      if (mode === 'price') {
+        const value = Number(input.value);
+        if (Number.isNaN(value) || value <= 0) return;
+        found.offer.price = round2(value);
+      }
+
+      if (mode === 'quantity') {
+        const value = Math.floor(Number(input.value));
+        if (Number.isNaN(value) || value <= 0) return;
+        found.offer.quantity = value;
+      }
+
+      renderMyLots();
+      renderMarket();
+      renderProductTab();
+    });
+  });
+}
+
+function findUserOffer(offerId) {
+  for (const product of state.products) {
+    const offer = product.offers.find((o) => o.id === offerId && o.owner === USER_OWNER);
+    if (offer) return { product, offer };
+  }
+  return null;
 }
 
 function renderBalance() {
@@ -586,7 +710,6 @@ function toggleAdminMode() {
     state.adminEnabled = true;
     els.adminToggleBtn.textContent = 'Выключить админ-доступ';
     els.adminBadge.textContent = 'Режим: администратор';
-    editBalanceByAdmin();
     renderProductTab();
   } else {
     state.adminEnabled = false;
