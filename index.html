@@ -10,6 +10,7 @@
   <header class="topbar">
     <h1>Биржа DSM</h1>
     <div class="admin-controls">
+      <div class="balance-box">Баланс: <strong id="userBalance">0 ДСМ</strong></div>
       <button id="adminToggleBtn" class="secondary">Включить админ-доступ</button>
       <span id="adminBadge" class="badge">Режим: пользователь</span>
     </div>
@@ -103,7 +104,6 @@
             <th>Цена</th>
             <th>Количество</th>
             <th>Владелец</th>
-            <th>Источник</th>
             <th>Сделка</th>
           </tr>
         </thead>
@@ -117,13 +117,6 @@
         <div class="controls-row">
           <button id="showMarketStats" class="secondary">Общий рынок</button>
           <button id="showProductStats" class="secondary">По выбранному товару</button>
-          <label>
-            Вид
-            <select id="statsViewMode">
-              <option value="absolute">Абсолютные значения</option>
-              <option value="graph">График</option>
-            </select>
-          </label>
           <label>
             Период
             <select id="statsPeriod">
@@ -145,7 +138,7 @@
       <form id="lotForm" class="lot-form">
         <label>
           Название товара
-          <input id="lotName" type="text" placeholder="Например, Железная руда (т)" list="productsList" required />
+          <select id="lotName" required></select>
         </label>
         <label>
           Тип лота
@@ -164,8 +157,7 @@
         </label>
         <button type="submit">Создать лот</button>
       </form>
-      <datalist id="productsList"></datalist>
-      <p class="hint">Вы можете выбрать существующий товар или создать новый пользовательский.</p>
+      <p class="hint">Можно создавать лоты только по товарам из исходного списка.</p>
     </section>
   </main>
 
