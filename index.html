@@ -32,6 +32,17 @@
             <ul id="searchSuggestions" class="suggestions"></ul>
           </div>
           <label>
+            Категория
+            <select id="categoryFilter"></select>
+          </label>
+          <label>
+            Тип лота
+            <select id="lotTypeFilter">
+              <option value="sell">Продажа</option>
+              <option value="buy">Покупка</option>
+            </select>
+          </label>
+          <label>
             Сортировать по
             <select id="sortBy">
               <option value="name">названию</option>
@@ -63,7 +74,23 @@
     <section id="product" class="tab-panel">
       <div class="panel-header">
         <h2 id="productTitle">Карточка товара</h2>
-        <div>
+        <div class="controls-row">
+          <label>
+            Тип лота
+            <select id="productLotTypeFilter">
+              <option value="sell">Продажа</option>
+              <option value="buy">Покупка</option>
+            </select>
+          </label>
+          <label>
+            Сортировать по
+            <select id="productSortBy">
+              <option value="price">цене</option>
+              <option value="quantity">количеству</option>
+              <option value="owner">владельцу</option>
+            </select>
+          </label>
+          <button id="productSortDirBtn" class="secondary">↑</button>
           <button id="backToMarket" class="secondary">← Вернуться на общий рынок</button>
           <button id="goToProductStats" class="secondary">Статистика товара</button>
         </div>
@@ -75,8 +102,9 @@
             <th>Товар</th>
             <th>Цена</th>
             <th>Количество</th>
+            <th>Владелец</th>
             <th>Источник</th>
-            <th>Купить</th>
+            <th>Сделка</th>
           </tr>
         </thead>
         <tbody id="productOffersBody"></tbody>
@@ -86,9 +114,24 @@
     <section id="stats" class="tab-panel">
       <div class="panel-header">
         <h2>Статистика покупок</h2>
-        <div>
+        <div class="controls-row">
           <button id="showMarketStats" class="secondary">Общий рынок</button>
           <button id="showProductStats" class="secondary">По выбранному товару</button>
+          <label>
+            Вид
+            <select id="statsViewMode">
+              <option value="absolute">Абсолютные значения</option>
+              <option value="graph">График</option>
+            </select>
+          </label>
+          <label>
+            Период
+            <select id="statsPeriod">
+              <option value="days">Дни</option>
+              <option value="weeks">Недели</option>
+              <option value="months">Месяцы</option>
+            </select>
+          </label>
         </div>
       </div>
       <div id="statsContent"></div>
@@ -105,6 +148,13 @@
           <input id="lotName" type="text" placeholder="Например, Железная руда (т)" list="productsList" required />
         </label>
         <label>
+          Тип лота
+          <select id="lotType" required>
+            <option value="sell">Продажа</option>
+            <option value="buy">Покупка</option>
+          </select>
+        </label>
+        <label>
           Цена
           <input id="lotPrice" type="number" min="0.01" step="0.01" required />
         </label>
@@ -118,10 +168,6 @@
       <p class="hint">Вы можете выбрать существующий товар или создать новый пользовательский.</p>
     </section>
   </main>
-
-  <template id="iconTemplate">
-    <div class="icon-placeholder">заглушка</div>
-  </template>
 
   <script src="app.js"></script>
 </body>
