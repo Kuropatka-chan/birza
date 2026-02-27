@@ -10,7 +10,7 @@
   <header class="topbar">
     <h1>Биржа DSM</h1>
     <div class="admin-controls">
-      <div class="balance-box">Баланс: <strong id="userBalance">0 ДСМ</strong></div>
+      <button id="userBalanceBtn" class="balance-box">Баланс: <strong id="userBalance">0 ДСМ</strong></button>
       <button id="adminToggleBtn" class="secondary">Включить админ-доступ</button>
       <span id="adminBadge" class="badge">Режим: пользователь</span>
     </div>
@@ -43,15 +43,6 @@
               <option value="buy">Покупка</option>
             </select>
           </label>
-          <label>
-            Сортировать по
-            <select id="sortBy">
-              <option value="name">названию</option>
-              <option value="price">цене</option>
-              <option value="quantity">количеству</option>
-            </select>
-          </label>
-          <button id="sortDirBtn" class="secondary">↑</button>
         </div>
       </div>
 
@@ -60,11 +51,11 @@
           <tr>
             <th>Иконка</th>
             <th>Товар</th>
-            <th>Категория</th>
-            <th>Средняя цена</th>
-            <th>Мин. цена</th>
-            <th>Макс. цена</th>
-            <th>Всего доступно</th>
+            <th data-sort-col="category" class="sortable">Категория</th>
+            <th data-sort-col="avg" class="sortable">Средняя цена</th>
+            <th data-sort-col="min" class="sortable">Мин. цена</th>
+            <th data-sort-col="max" class="sortable">Макс. цена</th>
+            <th data-sort-col="totalQty" class="sortable">Всего доступно</th>
             <th>Действия</th>
           </tr>
         </thead>
@@ -138,7 +129,10 @@
       <form id="lotForm" class="lot-form">
         <label>
           Название товара
-          <select id="lotName" required></select>
+          <div class="search-wrap">
+            <input id="lotNameInput" type="text" placeholder="Начните вводить название..." autocomplete="off" required />
+            <ul id="lotNameSuggestions" class="suggestions"></ul>
+          </div>
         </label>
         <label>
           Тип лота
@@ -158,6 +152,21 @@
         <button type="submit">Создать лот</button>
       </form>
       <p class="hint">Можно создавать лоты только по товарам из исходного списка.</p>
+
+      <h3>Мои лоты</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Товар</th>
+            <th>Тип</th>
+            <th>Цена</th>
+            <th>Количество</th>
+            <th>Статус</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody id="myLotsBody"></tbody>
+      </table>
     </section>
   </main>
 

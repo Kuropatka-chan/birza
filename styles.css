@@ -58,6 +58,13 @@ button { cursor: pointer; }
 button:hover { filter: brightness(1.1); }
 button.secondary { background: #202c47; }
 button.buy { background: #2b6d45; border-color: #39945f; }
+button.link-btn {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  padding: 0;
+}
 
 .tab.active { background: #2d4473; border-color: #5b7bb9; }
 
@@ -86,6 +93,7 @@ th, td {
 }
 
 th { background: #263354; }
+th.sortable { cursor: pointer; user-select: none; }
 
 .icon-placeholder {
   width: 54px;
@@ -120,58 +128,12 @@ th { background: #263354; }
 
 .lot-form {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr auto;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto;
   gap: 10px;
   align-items: end;
 }
 .lot-form label { display: flex; flex-direction: column; gap: 6px; }
 .hint { margin: 8px auto; color: var(--muted); }
-
-.line-chart-wrap {
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 10px;
-  overflow-x: auto;
-}
-
-.line-chart {
-  width: 100%;
-  min-width: 760px;
-  height: 360px;
-}
-
-.axis-line {
-  stroke: #5a6f9d;
-  stroke-width: 1.5;
-}
-
-.grid-line {
-  stroke: #283552;
-  stroke-width: 1;
-}
-
-.axis-label {
-  fill: var(--muted);
-  font-size: 11px;
-}
-
-.price-line {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 3;
-}
-
-.chart-point {
-  fill: #8fe8ff;
-  stroke: #102238;
-  stroke-width: 2;
-}
-
-.single-point-chart {
-  background: var(--surface);
-  padding: 14px;
-  border-radius: 10px;
-}
 
 @media (max-width: 1100px) {
   .lot-form { grid-template-columns: 1fr; }
