@@ -57,6 +57,7 @@ function uid() {
 
 async function init() {
   await loadProducts();
+  await loadBackgroundStats();
   bindEvents();
   refreshCategoryFilter();
   renderBalance();
@@ -64,6 +65,42 @@ async function init() {
   renderStats();
   renderLotSuggestions();
   renderMyLots();
+}
+
+async function loadBackgroundStats() {
+  try {
+    const [salesRaw, buysRaw] = await Promise.all([
+      fetch('stats_sales_60_days.json').then((r) => r.json()),
+      fetch('stats_purchases_60_days.json').then((r) => r.json()),
+    ]);
+
+    const productMap = new Map(state.products.map((p) => [p.name, p]));
+    const normalize = (items, type) => items
+      .map((item) => {
+        const product = productMap.get(item.productName);
+        if (!product) return null;
+        const qty = Math.floor(Number(item.quantity));
+        const price = round2(Number(item.avgPrice));
+        if (!qty || !price) return null;
+        return {
+          ts: `${item.date}T12:00:00.000Z`,
+          productId: product.id,
+          productName: product.name,
+          type,
+          qty,
+          price,
+        };
+      })
+      .filter(Boolean);
+
+    state.dealsHistory = [
+      ...normalize(salesRaw, 'sell'),
+      ...normalize(buysRaw, 'buy'),
+    ];
+  } catch (err) {
+    console.error('Не удалось загрузить фоновую статистику.', err);
+    state.dealsHistory = [];
+  }
 }
 
 async function loadProducts() {
